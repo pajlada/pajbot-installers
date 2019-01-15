@@ -18,9 +18,9 @@ Define the callback URL for Shared as <<https://twitchapps.com/tmi>/>
 Define the callback URL for Bot as <<https://twitchapps.com/tmi>/>
 
 Set the Bot URL to <https://pb1.example.com/login/authorized> after you have provided the OAuth token in the script later on. Change the domain to your own. If you have a local install, change https to http in the url.
-
-Rename pb1install.config.example to pb1install.config and set the following options as instructed.
 ***
+Rename pb1install.config.example to pb1install.config and set the following options as instructed.
+
 Set ```PB1_ADM``` as your twitch username. This user will get level 2000 access to the bot.
 
 Set ```PB1_BRC``` as the broadcasters twitch username in lowercase. Bot will join this channel.
