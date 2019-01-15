@@ -487,12 +487,6 @@ else
     fi
 fi
 
-if [ -f /etc/nginx/conf.d/ssl.conf ]; then
-    echo "SSL config exists. skip copy"
-else
-    sudo mv $PB1TMP/ssl.conf /etc/nginx/conf.d/ssl.conf
-fi
-
 sudo mv $PB1TMP/nginx.conf /etc/nginx/nginx.conf
 sudo mv $PB1TMP/pajbot1-$PB1_NAME.conf /etc/nginx/sites-enabled/pajbot1-$PB1_NAME.conf
 sudo rm /etc/nginx/sites-enabled/default
