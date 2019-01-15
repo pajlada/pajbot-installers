@@ -1,0 +1,11 @@
+LOCAL_INSTALL="false" # Set to true if you want to use a ip address or a local domain as the hostname. This will disable SSL in the web interface.
+PB1_ADM="" #Admin Username
+PB1_BRC="" #Broadcaster's Username in lowercase
+PB1_BOT_OAUTH="" #Bot login token
+PB1_TIMEZONE="" #Timezone in TZ format
+PB1_HOST="" #Domain that the web interface will be reachable from.
+PB1_NAME="" #Bot Username
+PB1_HUB="" #PB1 Control Hub. Not required if you only plan to run a single bot instance.
+PB1_SHRD_CLID="" #Shared ClientID
+PB1_BOT_CLID="" #Bot ClientID
+PB1_BOT_CLSEC="" #Bot Client Secret
