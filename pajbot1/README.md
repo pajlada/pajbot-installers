@@ -13,9 +13,9 @@ If you want to run both bots on the same system with local install, use a local 
 ***
 Create 2 apps in the Twitch Developer site at <https://glass.twitch.tv/console/apps> and Call them BOTNAME-PB1-Shared and BOTNAME-PB1-Bot or something similar.
 
-Define the callback URL for Shared as <<https://twitchapps.com/tmi>/>
+Define the callback URL for Shared as <https://twitchapps.com/tmi>
 
-Define the callback URL for Bot as <<https://twitchapps.com/tmi>/>
+Define the callback URL for Bot as <https://twitchapps.com/tmi>
 
 Set the Bot URL to <https://pb1.example.com/login/authorized> after you have provided the OAuth token in the script later on. Change the domain to your own. If you have a local install, change https to http in the url.
 ***
@@ -25,7 +25,7 @@ Set ```PB1_ADM``` as your twitch username. This user will get level 2000 access 
 
 Set ```PB1_BRC``` as the broadcasters twitch username in lowercase. Bot will join this channel.
 
-Set ```PB1_BOT_OAUTH``` as a chat oauth token you can generate from here: <https://twitchapps.com/tmi/> Login with the bot account.
+Set ```PB1_BOT_OAUTH``` as a chat oauth token you can generate from here: <https://twitchapps.com/tmi> Login with the bot account.
 
 Set ```PB1_TIMEZONE``` as the timezone used by the bot in a format like Europe/Berlin
 
