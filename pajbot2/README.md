@@ -15,13 +15,15 @@ This script will install nodejs repositories and installs golang 1.11.4 into /us
 
 ~/.bash.aliases file is also updated to set the gopath and disable dotnet telemetry.
 ***
-Create 2 apps in the Twitch Developer site at <https://glass.twitch.tv/console/apps>
+Create 3 apps in the Twitch Developer site at <https://glass.twitch.tv/console/apps>
 
-Call them BOTNAME-PB2-USER and BOTNAME-PB2-BOT or something similar.
+Call them Botname-PB2-User and Botname-PB2-Bot and Botname-PB2-Streamer or something similar.
 
 Define the callback URL for the user application as <https://pb2.example.com/api/auth/twitch/user/callback">
 
 Define the callback URL for bot application as <https://pb2.example.com/api/auth/twitch/bot/callback">
+
+Define the callback URL for bot application as <https://pb2.example.com/api/auth/twitch/streamer/callback">
 
 Change the domain to your own. If you have a local install, change https to http in the urls.
 ***
@@ -34,6 +36,8 @@ Set ```PB2_HOST``` as the domain name you want to use to reach the web interface
 Set ```PB2_BOT_CLID``` and ```PB2_BOT_CLSEC``` as the Client ID and Secret from the bot application you created before.
 
 Set ```PB2_USER_CLID``` and ```PB2_USER_CLSEC``` as the Client ID and Secret from the user application you created before.
+
+Set ```PB2_STRM_CLID``` and ```PB2_STRM_CLSEC``` as the Client ID and Secret from the streamer application you created before.
 ***
 Run the script from a standard user that has sudo access.
 

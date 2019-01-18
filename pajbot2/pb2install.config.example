@@ -5,3 +5,5 @@ PB2_BOT_CLID="" # Bot App ClientID
 PB2_BOT_CLSEC="" # Bot App ClientSecret
 PB2_USER_CLID="" # User App ClientID
 PB2_USER_CLSEC="" # User App ClientSecret
+PB2_STRM_CLID="" # Streamer App ClientID
+PB2_STRM_CLSEC="" # Streamer App ClientSecret

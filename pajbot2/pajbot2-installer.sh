@@ -26,7 +26,7 @@ if [[ -z $PB2_ADMID || -z $PB2_HOST ]]; then
     exit 1
 fi
 
-if [[ -z $PB2_BOT_CLID || -z $PB2_BOT_CLSEC || -z $PB2_USER_CLID || -z $PB2_USER_CLSEC ]]; then
+if [[ -z $PB2_BOT_CLID || -z $PB2_BOT_CLSEC || -z $PB2_USER_CLID || -z $PB2_USER_CLSEC || -z $PB2_STRM_CLID || -z $PB2_STRM_CLSEC ]]; then
     echo "No credentials specified."
     exit 1
 fi
@@ -346,6 +346,11 @@ cat << EOF > ~/go/src/github.com/pajlada/pajbot2/cmd/bot/config.json
                 "ClientID": "$PB2_USER_CLID",
                 "ClientSecret": "$PB2_USER_CLSEC",
                 "RedirectURI": "$PB2_PROTO://$PB2_HOST/api/auth/twitch/user/callback"
+            },
+            "Streamer": {
+                "ClientID": "$PB2_STRM_CLID",
+                "ClientSecret": "$PB2_STRM_CLSEC",
+                "RedirectURI": "$PB2_PROTO://$PB2_HOST/api/auth/twitch/streamer/callback"
             }
         }
     }
