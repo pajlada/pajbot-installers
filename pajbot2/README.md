@@ -21,9 +21,9 @@ Call them Botname-PB2-User and Botname-PB2-Bot and Botname-PB2-Streamer or somet
 
 Define the callback URL for the user application as <https://pb2.example.com/api/auth/twitch/user/callback">
 
-Define the callback URL for bot application as <https://pb2.example.com/api/auth/twitch/bot/callback">
+Define the callback URL for the bot application as <https://pb2.example.com/api/auth/twitch/bot/callback">
 
-Define the callback URL for bot application as <https://pb2.example.com/api/auth/twitch/streamer/callback">
+Define the callback URL for the streamer application as <https://pb2.example.com/api/auth/twitch/streamer/callback">
 
 Change the domain to your own. If you have a local install, change https to http in the urls.
 ***
