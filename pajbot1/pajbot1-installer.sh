@@ -30,8 +30,10 @@ if [ "$LOCAL_INSTALL" == "true" ]
 then
     echo "Local install enabled."
     PB1_PROTO="http"
+    PB1_WS_PROTO="ws"
 else
     PB1_PROTO="https"
+    PB1_WS_PROTO="wss"
 fi
 
 #Validate Sudo
@@ -244,8 +246,8 @@ dev = 1
 
 [websocket]
 enabled = 1
-port = 2320
-ssl = 0
+port = 2337
+host = $PB1_WS_PROTO://$PB1_HOST/clrsocket
 
 ; you can optionally populate this for pleblist
 [youtube]
@@ -373,6 +375,13 @@ server {
         expires epoch;
         add_header Cache-Control "public";
     }
+
+    location /clrsocket {
+        proxy_pass http://127.0.0.1:2337;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "Upgrade";
+    }
 }
 EOF
 else
@@ -415,6 +424,13 @@ server {
         include uwsgi_params;
         expires epoch;
         add_header Cache-Control "public";
+    }
+
+    location /clrsocket {
+        proxy_pass http://127.0.0.1:2337;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "Upgrade";
     }
 }
 EOF
