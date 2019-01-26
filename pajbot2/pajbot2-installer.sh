@@ -72,7 +72,7 @@ sudo dpkg -i $PB2TMP/packages-microsoft-prod.deb
 #Configure APT and Install Packages
 sudo add-apt-repository universe
 sudo apt update && sudo apt upgrade -y
-sudo apt install mysql-server redis-server nodejs build-essential apt-transport-https dotnet-sdk-2.2 mlocate nginx -y
+sudo apt install mysql-server redis-server nodejs build-essential apt-transport-https dotnet-sdk-2.2 nginx -y
 sudo apt-mark hold dotnet-sdk-2.2
 sudo updatedb
 
@@ -91,7 +91,7 @@ echo 'PATH=$GOPATH/bin:$GOROOT/bin:$PATH'
 source ~/.bash_aliases
 
 #Define CLRPath as a variable for future uses
-CLRPATH=$(locate /libcoreclr.so | grep -v cache | head -n 1 | sed -ne 's/\/libcoreclr\.so//p')
+CLRPATH=$(dotnet --list-runtimes | grep Microsoft.NETCore.App | tail -1 | awk '{gsub(/\[|\]/, "", $3); print $3 "/" $2}')
 
 #Download PB2 and node deps for web, and build web
 go get github.com/pajlada/pajbot2
