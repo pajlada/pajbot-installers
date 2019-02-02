@@ -67,17 +67,12 @@ PB1TMP=$HOME/pb1tmp
 #Configure APT and Install Packages
 sudo add-apt-repository universe
 sudo apt update && sudo apt upgrade -y
-sudo apt install mysql-server redis-server openjdk-8-jre-headless nginx libssl-dev python3 python3-pip python3-venv uwsgi uwsgi-plugin-python3 git -y
+sudo apt install mysql-server redis-server openjdk-8-jre-headless nginx libssl-dev python3 python3-pip python3-venv uwsgi uwsgi-plugin-python3 git curl -y
 
-#Build APIProxy
-cd ~/pb1tmp
-git clone https://github.com/zwb3/twitch-api-v3-proxy.git
-cd twitch-api-v3-proxy
-./gradlew build
-
-#Copy APIProxy and configs to final location
+#Install APIProxy
 sudo mkdir /opt/apiproxy
-sudo tar xvf ./build/distributions/twitch-api-v3-proxy-boot.tar -C /opt/apiproxy --strip-components=1
+sudo curl -L "https://github.com/zwb3/twitch-api-v3-proxy/releases/download/release/twitch-api-v3-proxy-boot.tar" | sudo tar xvf - -C /opt/apiproxy --strip-components=1 --exclude='twitch-api-v3-proxy-boot/application.properties'
+
 cat << EOF > $PB1TMP/application.properties
 logging.level.root=WARN
 logging.level.de.zwb3=DEBUG
