@@ -67,7 +67,7 @@ PB1TMP=$HOME/pb1tmp
 #Configure APT and Install Packages
 sudo add-apt-repository universe
 sudo apt update && sudo apt upgrade -y
-sudo apt install mysql-server redis-server openjdk-8-jdk-headless nginx libssl-dev python3 python3-pip python3-venv uwsgi uwsgi-plugin-python3 -y
+sudo apt install mysql-server redis-server openjdk-8-jre-headless nginx libssl-dev python3 python3-pip python3-venv uwsgi uwsgi-plugin-python3 git -y
 
 #Build APIProxy
 cd ~/pb1tmp
