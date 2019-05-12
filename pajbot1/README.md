@@ -1,6 +1,6 @@
 # pajbot1 installer
 
-## Only Ubuntu 18.04 LTS is supported
+## Only Ubuntu 18.04 and above are tested to work
 
 ### The script will overwrite nginx.conf and deletes the default vhost conf file
 

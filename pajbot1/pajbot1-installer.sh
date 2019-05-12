@@ -1,16 +1,10 @@
 #!/usr/bin/env bash
-DIST="Ubuntu"
-DISTVER="18.04"
-DHSIZE="4096" #DHParam Size
-LOCAL_INSTALL="false" # Set to true if you want to use a ip address or a local domain as the hostname. This will disable SSL in the web interface.
-SQL_ROOTPWD="penis123" #MySQL Root password. Keep this same across both installers if installing both bots
-PB1_PWD=$(< /dev/urandom tr -dc A-Z-a-z-0-9 | head -c"${1:-32}";echo;) #PB1 MySQL user password. Randomgenerated string
 PB1_BRC_OAUTH="" # Broadcaster OAuth. Leave this empty.
 
 if [ -f $PWD/pb1install.config ]; then
     source $PWD/pb1install.config
-    PB1_DB="pb1_$PB1_NAME"
-    PB1_USER="pb1_$PB1_NAME"
+    PB1_DB="pb_$PB1_NAME"
+    PB1_USER="pb_$PB1_NAME"
 else
     echo "Config file missing. Exit."
     exit 1
@@ -21,7 +15,7 @@ if [[ -z $PB1_ADM || -z $PB1_BRC || -z $PB1_TIMEZONE || -z $PB1_HOST || -z $PB1_
     exit 1
 fi
 
-if [[ -z $PB1_BOT_CLID || -z $PB1_BOT_CLSEC || -z $PB1_SHRD_CLID || -z $PB1_BOT_OAUTH ]]; then
+if [[ -z $PB1_BOT_CLID || -z $PB1_BOT_CLSEC || -z $PB1_SHRD_CLID ]]; then
     echo "No credentials specified."
     exit 1
 fi
@@ -43,13 +37,6 @@ if [ ! -f /tmp/sudotag ]; then
     exit 1
 fi
 
-source /etc/lsb-release
-if [ "$DISTRIB_ID" != "$DIST" ] || [ "$DISTRIB_RELEASE" != "$DISTVER" ]
-then
-  echo "Incorrect OS. Only Ubuntu 18.04 LTS is supported."
-  exit 1
-fi
-
 #Get OAuth token for the broadcaster from the user
 if [ -z "$PB1_BRC_OAUTH" ]
 then
@@ -64,10 +51,13 @@ fi
 mkdir ~/pb1tmp
 PB1TMP=$HOME/pb1tmp
 
+#Create pajbot user
+sudo adduser --shell /bin/bash --system --group pajbot
+
 #Configure APT and Install Packages
 sudo add-apt-repository universe
 sudo apt update && sudo apt upgrade -y
-sudo apt install mysql-server redis-server openjdk-8-jre-headless nginx libssl-dev python3 python3-pip python3-venv uwsgi uwsgi-plugin-python3 git curl -y
+sudo apt install mariadb-server redis-server openjdk-8-jre-headless nginx libssl-dev python3 python3-pip python3-venv uwsgi uwsgi-plugin-python3 git curl -y
 
 #Install APIProxy
 sudo mkdir /opt/apiproxy
@@ -81,7 +71,7 @@ server.port=7221
 clientId=$PB1_SHRD_CLID
 EOF
 sudo mv $PB1TMP/application.properties /opt/apiproxy/application.properties
-sudo chown -R www-data:www-data /opt/apiproxy
+sudo chown -R pajbot:pajbot /opt/apiproxy
 
 #Setup Systemd unit for APIProxy and start the service
 cat << EOF > $PB1TMP/apiproxy.service
@@ -91,8 +81,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=pajbot
+Group=pajbot
 WorkingDirectory=/opt/apiproxy
 ExecStart=/opt/apiproxy/bin/twitch-api-v3-proxy
 RestartSec=1
@@ -116,42 +106,17 @@ source ./venv/bin/activate
 python3 -m pip install wheel
 python3 -m pip install -r requirements.txt
 
-#Setup MySQL
-cat << EOF > $PB1TMP/allowinvaliddate.cnf
-[mysqld]
-sql-mode="ALLOW_INVALID_DATES"
-EOF
-
-if [ -f /etc/mysql/mysql.conf.d/allowinvaliddate.cnf ]; then
-    echo "MySQL mods aleady exist. skip copying"
-else
-    sudo mv $PB1TMP/allowinvaliddate.cnf /etc/mysql/mysql.conf.d/allowinvaliddate.cnf
-    sudo systemctl restart mysql
-fi
-
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$SQL_ROOTPWD';"
-mysql -uroot -p"$SQL_ROOTPWD" <<_EOF_
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-FLUSH PRIVILEGES;
-_EOF_
-
-mysql -uroot -p"$SQL_ROOTPWD" -e "CREATE DATABASE $PB1_DB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
-mysql -uroot -p"$SQL_ROOTPWD" -e "GRANT ALL PRIVILEGES ON $PB1_DB.* TO '$PB1_USER'@'localhost' IDENTIFIED BY '$PB1_PWD';"
+#Setup MySQL User
+sudo mysql -e "CREATE DATABASE $PB1_DB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
+sudo mysql -e "CREATE USER pajbot@localhost IDENTIFIED VIA unix_socket;"
+sudo mysql -e "GRANT ALL PRIVILEGES ON \`pb\_%\`.* to 'pajbot'@'localhost';"
+sudo mysql -e "FLUSH PRIVILEGES;"
 
 #Setup pb1config
 cat << EOF > $PB1TMP/$PB1_NAME.ini
 [main]
 ; display name of the bot account
 nickname = $PB1_NAME
-; IRC password of the bot account
-; authorize this with your bot-specific client ID
-; authorize with https://id.twitch.tv/oauth2/authorize?client_id=0f958ce6bf20ba8ea84a21e43ebba1&redirect_uri=https://twitchapps.com/tmi/&response_type=token&scope=channel:moderate+chat:edit+chat:read+whispers:read+whispers:edit
-; make sure your bot-specific application has "https://twitchapps.com/tmi/" set as the
-; callback URL temporarily for this authorization, change it back afterwards.
-password = $PB1_BOT_OAUTH
 ; login name of the broadcaster
 streamer = $PB1_BRC
 ; login name of the primary admin (will be granted level 2000 initially)
@@ -159,15 +124,21 @@ admin = $PB1_ADM
 ; an additional channel the bot will join and receive commands from.
 control_hub = $PB1_HUB
 ; db connection, format: mysql+pymysql://username:password@host/databasename?charset=utf8mb4
-db = mysql+pymysql://$PB1_USER:$PB1_PWD@localhost/$PB1_DB?charset=utf8mb4
-;Add the bot as a whisper account so it can be used to send whispers.
-add_self_as_whisper_account = 1
+db = mysql+pymysql:///$PB1_DB?unix_socket=/var/run/mysqld/mysqld.sock&charset=utf8mb4
 ; timezone the bot uses internally, e.g. to show the time when somebody was last seen for example
 ; use the names from this list https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 timezone = $PB1_TIMEZONE
 ; Set this to 1 (0 otherwise) to allow twitch channel moderators to create highlights
 ; (twitch channel moderators are completely separate from moderators on the bot, which is level 500 and above)
-trusted_mods = 1
+trusted_mods = 0
+; Set this to a valid Wolfram|Alpha App ID to enable wolfram alpha query functionality
+; via !add funccommand query|wolframquery query --level 250
+;wolfram = ABCDEF-GHIJKLMNOP
+; this location/ip is used to localize the queries to a default location.
+; https://products.wolframalpha.com/api/documentation/#semantic-location
+; if you specify both IP and location, the location will be ignored.
+;wolfram_ip = 62.41.0.123
+;wolfram_location = Amsterdam
 
 [web]
 ; enabled web modules, separated by spaces. For example you could make this
@@ -179,11 +150,6 @@ streamer_name = $PB1_BRC
 domain = $PB1_HOST
 ; this configures hearthstone decks functionality if you have the module enabled
 deck_tab_images = 1
-
-; streamtip login credentials if you are using pleblist, to get donations info
-[streamtip]
-client_id = abc
-client_secret = def
 
 ; streamelements login credentials if you are using pleblist, to get donations info
 ; note that streamelements login with pajbot is dead, since StreamElements removed their OAuth login endpoint.
@@ -201,11 +167,19 @@ client_secret = def
 [phrases]
 welcome = {nickname} {version} running!
 quit = {nickname} {version} shutting down...
+; optional: you can make the bot print multiple messages on startup/quit,
+; for example a common use for this might be to turn emote only mode on when the bot is quit
+; and to turn it back off once it's back. (notice the indentation)
+;welcome = {nickname} {version} running!
+;    .emoteonlyoff
+;quit = .emoteonly
+;    {nickname} {version} shutting down...
 
 ; this is to allow users/admins to login with the bot on the website
 ; use a bot/channel-specific client id/secret for this
 ; the application name of this application will be shown to all users/admins
 ; that want to login on the site.
+; the client_id and client_secret values are required to authorize the bot and get its access token to join chat
 [webtwitchapi]
 client_id = $PB1_BOT_CLID
 client_secret = $PB1_BOT_CLSEC
@@ -262,8 +236,8 @@ processes = 1
 threads = 1
 workers = 1
 
-uid = www-data
-gid = www-data
+uid = pajbot
+gid = pajbot
 
 chmod-socket = 777
 vacuum = true
@@ -511,8 +485,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=pajbot
+Group=pajbot
 WorkingDirectory=/opt/pajbot
 ExecStart=/usr/bin/uwsgi --ini uwsgi_shared.ini --ini uwsgi_cache.ini --socket /srv/pajbot-web/.%i.sock --pyargv "--config configs/%i.ini" --virtualenv venv
 RestartSec=2
@@ -528,8 +502,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=www-data
-Group=www-data
+User=pajbot
+Group=pajbot
 WorkingDirectory=/opt/pajbot
 Environment=VIRTUAL_ENV=/opt/pajbot/venv
 ExecStart=/bin/bash -c "PATH=$VIRTUAL_ENV/bin:$PATH /opt/pajbot/venv/bin/python3 main.py --config configs/%i.ini"
@@ -548,8 +522,9 @@ mv $PB1TMP/uwsgi_shared.ini $PB1TMP/pajbot/
 sudo cp -r $PB1TMP/pajbot /opt/pajbot
 cd /opt/pajbot
 sudo mkdir /srv/pajbot /srv/pajbot-web
-sudo chown www-data:www-data /srv/pajbot /srv/pajbot-web
-sudo chown -R www-data:www-data /opt/pajbot
+sudo chown pajbot:pajbot /srv/pajbot /srv/pajbot-web
+sudo chown -R pajbot:pajbot /opt/pajbot
+
 
 #Enable systemd services for the bot and start it up.
 sudo mv $PB1TMP/pajbot@.service /etc/systemd/system/
@@ -559,8 +534,8 @@ sleep 2
 sudo systemctl enable pajbot@$PB1_NAME
 sudo systemctl enable pajbot-web@$PB1_NAME
 sudo systemctl start pajbot@$PB1_NAME
-echo 'Waiting 45 seconds for bot to initialize and starting the webui after that.'
-sleep 45
+echo 'Waiting 30 seconds for bot to initialize and starting the webui after that.'
+sleep 30
 sudo systemctl start pajbot-web@$PB1_NAME
 
 #Configure Firewall
@@ -570,6 +545,7 @@ sudo ufw --force enable # Enable Firewall
 
 #Done
 echo "pajbot1 Installed. Access the web interface in $PB1_PROTO://$PB1_HOST"
+echo "Access $PB1_PROTO://$PB1_HOST/bot_login and login with your bot account."
 echo "Remember to change the Bot application callback URL to $PB1_PROTO://$PB1_HOST/login/authorized or you cannot login to the webui."
 
 sudo rm -rf /tmp/sudotag
