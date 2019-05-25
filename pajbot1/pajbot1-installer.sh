@@ -328,7 +328,6 @@ upstream $PB1_NAME-botsite {
 server {
     listen 80;
     server_name $PB1_HOST;
-    include /etc/nginx/harden.conf;
 
     charset utf-8;
 
@@ -362,7 +361,6 @@ upstream $PB1_NAME-botsite {
 server {
     listen 80;
     server_name $PB1_HOST;
-    include /etc/nginx/harden.conf;
 
     location /.well-known/acme-challenge/ {
         alias /var/www/le_root/.well-known/acme-challenge/;
@@ -376,7 +374,6 @@ server {
 server {
     listen 443 ssl http2;
     server_name $PB1_HOST;
-    include /etc/nginx/harden.conf;
     ssl_certificate /root/.acme.sh/$PB1_HOST/fullchain.cer;
     ssl_certificate_key /root/.acme.sh/$PB1_HOST/$PB1_HOST.key;
 
@@ -404,13 +401,6 @@ server {
 }
 EOF
 fi
-
-#nginx hardening, disable unneeded methods
-cat << 'EOF' > $PB1TMP/harden.conf
-if ($request_method !~ ^(GET|HEAD|POST|DELETE)$ ) {
-    return 444;
-}
-EOF
 
 #nginx main config
 cat << 'EOF' > $PB1TMP/nginx.conf
@@ -455,12 +445,6 @@ http {
 
 EOF
 
-if [ -f /etc/nginx/harden.conf ]; then
-    echo "Hardening config already exists. skip copying"
-else
-    sudo mv $PB1TMP/harden.conf /etc/nginx/harden.conf
-fi
-
 if [[ $LOCAL_INSTALL = "true" ]]
 then
     echo 'Local install enabled. Do not copy ssl config.'
@@ -473,7 +457,8 @@ else
 fi
 
 sudo mv $PB1TMP/nginx.conf /etc/nginx/nginx.conf
-sudo mv $PB1TMP/pajbot1-$PB1_NAME.conf /etc/nginx/sites-enabled/pajbot1-$PB1_NAME.conf
+sudo mv $PB1TMP/pajbot1-$PB1_NAME.conf /etc/nginx/sites-available/pajbot1-$PB1_NAME.conf
+sudo ln -s /etc/nginx/sites-available/pajbot1-$PB1_NAME.conf /etc/nginx/sites-enabled/
 sudo rm /etc/nginx/sites-enabled/default
 sudo systemctl restart nginx
 
@@ -525,7 +510,6 @@ sudo mkdir /srv/pajbot /srv/pajbot-web
 sudo chown pajbot:pajbot /srv/pajbot /srv/pajbot-web
 sudo chown -R pajbot:pajbot /opt/pajbot
 
-
 #Enable systemd services for the bot and start it up.
 sudo mv $PB1TMP/pajbot@.service /etc/systemd/system/
 sudo mv $PB1TMP/pajbot-web@.service /etc/systemd/system/
@@ -537,11 +521,6 @@ sudo systemctl start pajbot@$PB1_NAME
 echo 'Waiting 30 seconds for bot to initialize and starting the webui after that.'
 sleep 30
 sudo systemctl start pajbot-web@$PB1_NAME
-
-#Configure Firewall
-sudo ufw allow ssh # Allow inbound port 22 for SSH access
-sudo ufw allow 'Nginx Full' # Allow inbound ports 80 and 443 for webui access
-sudo ufw --force enable # Enable Firewall
 
 #Done
 echo "pajbot1 Installed. Access the web interface in $PB1_PROTO://$PB1_HOST"
