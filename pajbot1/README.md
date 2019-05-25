@@ -9,9 +9,11 @@ If you are behind a NAT, forward ports 80 and 443 to the server.
 
 Set LOCAL_INSTALL to true in the config if you do not have a domain, or if you want to install pajbot1 locally.
 
-If you want to run both bots on the same system with local install, use a local domain like pb1.server.local to prevent conflicts with the IP address
+If you want to run both bots on the same system with local install, use a local domain like pb1.server.local for example to prevent conflicts with the IP address
+
+Run the script from a standard user that has sudo access.
 ***
-Create 2 apps in the Twitch Developer site at <https://glass.twitch.tv/console/apps> and Call them BOTNAME-PB1-Shared and BOTNAME-PB1-Bot or something similar.
+Create 2 apps in the Twitch Developer site at <https://dev.twitch.tv/console/apps> and Call them BOTNAME-PB1-Shared and BOTNAME-PB1-Bot or something similar.
 
 Define the callback URL for Shared as <https://twitchapps.com/tmi>
 
@@ -39,7 +41,6 @@ Set ```PB1_SHRD_CLID``` as the Client ID of the shared application you created b
 
 Set ```PB1_BOT_CLID``` and ```PB1_BOT_CLSEC``` as the Client ID and Secret from the bot application you created before.
 ***
-Run the script from a standard user that has sudo access.
 
 After install, you can edit the bot config in /opt/pajbot/configs/botname.ini if you want to set more advanced settings.
 
