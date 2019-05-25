@@ -99,7 +99,7 @@ sudo systemctl start apiproxy.service
 
 #Download PB1 and setup venv and deps
 cd $PB1TMP
-git clone https://github.com/pajlada/pajbot.git
+git clone https://github.com/pajbot/pajbot.git
 cd pajbot
 python3 -m venv venv
 source ./venv/bin/activate
