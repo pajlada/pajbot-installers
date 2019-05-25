@@ -1,4 +1,7 @@
 LOCAL_INSTALL="false" # Set to true if you want to use a ip address or a local domain as the hostname. This will disable SSL in the web interface.
+GOVER="1.12.5"
+DHSIZE="4096" #DHParameter Size
+PB2_DB="pb2" #PB2 Database Name
 PB2_ADMID="" # Twitch UserID of the admin account
 PB2_HOST="" # Domain used to reach the web interface.
 PB2_BOT_CLID="" # Bot App ClientID

@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
-DIST="Ubuntu"
-DISTVER="18.04"
-GOVER="1.11.4"
-LOCAL_INSTALL="false" # Set to true if you want to use a ip address or a local domain as the hostname. This will disable SSL in the web interface.
-PM2_NAME="pajbot2" #PM2 Process name for pajbot2
-DHSIZE="4096" #DHParameter Size
-PB2_DB="pb2" #PB2 Database Name
-PB2_USER="pb2" #PB2 Database User
-PB2_PWD=$(< /dev/urandom tr -dc A-Z-a-z-0-9 | head -c"${1:-32}";echo;) #PB2 MySQL password. Randomgenerated string
-SQL_ROOTPWD="penis123" #MySQL Root password. Keep this same across both installers if installing both bots
 PB2_PORT="45334"
 PB2_PATH="$HOME/go/src/github.com/pajlada/pajbot2/cmd/bot" #PB2 Bot directory
-PB2_BRANCH="master" #PB2 Git branch to use. Use 'master' for stable and 'develop' for latest code.
-source /etc/lsb-release
+source /etc/os-release
 
 if [ -f $PWD/pb2install.config ]; then
     source $PWD/pb2install.config 
@@ -21,13 +10,25 @@ else
     exit 1
 fi
 
-if [[ -z $PB2_ADMID || -z $PB2_HOST ]]; then
-    echo "Some config options are undefined"
+if [[ -z $PB2_ADMID || -z $PB2_HOST || -z $PB2_BOT_CLID || -z $PB2_BOT_CLSEC || -z $PB2_USER_CLID || -z $PB2_USER_CLSEC || -z $PB2_STRM_CLID || -z $PB2_STRM_CLSEC ]]; then
+    echo "Some config options are missing."
     exit 1
 fi
 
-if [[ -z $PB2_BOT_CLID || -z $PB2_BOT_CLSEC || -z $PB2_USER_CLID || -z $PB2_USER_CLSEC || -z $PB2_STRM_CLID || -z $PB2_STRM_CLSEC ]]; then
-    echo "No credentials specified."
+if [ $ID == "debian" ] && [ $VERSION_ID == "9" ]
+then
+    echo "Debian 9 detected"
+    OS_VER="debian9"
+elif [ $ID == "ubuntu" ] && [ $VERSION_ID == "16.04" ]
+then
+    echo "Ubuntu 16.04 Detected"
+    OS_VER="ubuntu1604"
+elif [ $ID == "ubuntu" ] && [ $VERSION_ID == "19.04" ]
+then
+    echo "Ubuntu 19.04 Detected"
+    OS_VER="ubuntu1904"
+else
+    echo "No supported OS detected. Exit script."
     exit 1
 fi
 
@@ -48,90 +49,79 @@ if [ ! -f /tmp/sudotag ]; then
     exit 1
 fi
 
-if [ "$DISTRIB_ID" != "$DIST" ] || [ "$DISTRIB_RELEASE" != "$DISTVER" ]
-then
-  echo "Incorrect OS. Only Ubuntu 18.04 LTS is supported."
-  exit 1
-fi
-
 #Create Tempdir for install files
 mkdir ~/pb2tmp
 PB2TMP=$HOME/pb2tmp
 
+#Create pajbot user
+sudo adduser --shell /bin/bash --system --group pajbot
+
 #Install Golang
-wget https://dl.google.com/go/go$GOVER.linux-amd64.tar.gz -q -O $PB2TMP/go$GOVER.linux-amd64.tar.gz
+wget https://dl.google.com/go/go$GOVER.linux-amd64.tar.gz -O $PB2TMP/go$GOVER.linux-amd64.tar.gz
 sudo tar xvzf $PB2TMP/go$GOVER.linux-amd64.tar.gz -C /usr/local
 
 #Add NodeJS Repo
 curl -sL https://deb.nodesource.com/setup_11.x | sudo -E bash -
 
 #Add Dotnet Core Repo
-wget -q https://packages.microsoft.com/config/ubuntu/18.04/packages-microsoft-prod.deb -O $PB2TMP/packages-microsoft-prod.deb
+if [ $OS_VER == "debian9" ]
+then
+wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.asc.gpg
+sudo mv microsoft.asc.gpg /etc/apt/trusted.gpg.d/
+wget -q https://packages.microsoft.com/config/debian/9/prod.list
+sudo mv prod.list /etc/apt/sources.list.d/microsoft-prod.list
+sudo chown root:root /etc/apt/trusted.gpg.d/microsoft.asc.gpg
+sudo chown root:root /etc/apt/sources.list.d/microsoft-prod.list
+elif [ $OS_VER == "ubuntu1604" ]
+then
+wget -q https://packages.microsoft.com/config/ubuntu/16.04/packages-microsoft-prod.deb -O $PB2TMP/packages-microsoft-prod.deb
 sudo dpkg -i $PB2TMP/packages-microsoft-prod.deb
+elif [ $OS_VER == "ubuntu1904" ]
+then
+wget -q https://packages.microsoft.com/config/ubuntu/19.04/packages-microsoft-prod.deb -O $PB2TMP/packages-microsoft-prod.deb
+sudo dpkg -i $PB2TMP/packages-microsoft-prod.deb
+fi
 
 #Configure APT and Install Packages
 sudo add-apt-repository universe
 sudo apt update && sudo apt upgrade -y
-sudo apt install mysql-server redis-server nodejs build-essential apt-transport-https dotnet-sdk-2.2 nginx -y
-sudo apt-mark hold dotnet-sdk-2.2
-sudo updatedb
-
-#Install pm2
-sudo npm install pm2 -g
-sudo chown -R "$USER":"$USER" /home/"$USER"/.config
+sudo apt install mariadb-server redis-server nodejs build-essential apt-transport-https dotnet-sdk-2.2 nginx -y
 
 #Configure bash_aliases
 {
-echo 'DOTNET_CLI_TELEMETRY_OPTOUT=1'
-echo 'GOROOT=/usr/local/go'
-echo 'GOPATH=$HOME/go'
-echo 'PATH=$GOPATH/bin:$GOROOT/bin:$PATH'
-} >> ~/.bash_aliases
+echo 'export PATH=$PATH:/usr/local/go/bin'
+} >> ~/.bashrc
+source ~/.bashrc
 
-source ~/.bash_aliases
-
-#Define CLRPath as a variable for future uses
-CLRPATH=$(dotnet --list-runtimes | grep Microsoft.NETCore.App | tail -1 | awk '{gsub(/\[|\]/, "", $3); print $3 "/" $2}')
-
-#Download PB2 and node deps for web, and build web
-go get github.com/pajlada/pajbot2
-cd ~/go/src/github.com/pajlada/pajbot2/cmd/bot
-git checkout $PB2_BRANCH
-git pull
-git submodule update --init --recursive
-go get -u
-cd ~/go/src/github.com/pajlada/pajbot2/web
+#Download PB2 and node deps for web, and build the bot as the pajbot user
+cat << 'EOF' > /tmp/pajbot_inst.sh
+cd $HOME
+{
+echo 'export PATH=$PATH:/usr/local/go/bin'
+} >> ~/.bashrc
+source ~/.bashrc
+mkdir git
+cd git
+git clone --recursive https://github.com/pajbot/pajbot2
+cd pajbot2
+chmod +x ./utils/install.sh && ./utils/install.sh
+cd cmd/bot
+go get
+go build -tags csharp
+cd ../../web
 npm i
 npm run build
+cd ..
+EOF
+sudo chmod 777 /tmp/pajbot_inst.sh
+sudo -i -u pajbot /tmp/pajbot_inst.sh
+sudo rm /tmp/pajbot_inst.sh
 
 #Setup MySQL
-
-#Set sql-mode to allow invalid date formats as pb2 uses invalid date formats in it's migrations.
-cat << EOF > $PB2TMP/allowinvaliddate.cnf
-[mysqld]
-sql-mode="ALLOW_INVALID_DATES"
-EOF
-
-if [ -f /etc/mysql/mysql.conf.d/allowinvaliddate.cnf ]; then
-    echo "MySQL mods aleady exist. skip copying"
-else
-    sudo mv $PB2TMP/allowinvaliddate.cnf /etc/mysql/mysql.conf.d/allowinvaliddate.cnf
-    sudo systemctl restart mysql
-fi
-
-#Set root password and secure the database installation
-sudo mysql -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY '$SQL_ROOTPWD';"
-mysql -uroot -p"$SQL_ROOTPWD" <<_EOF_
-DELETE FROM mysql.user WHERE User='';
-DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1');
-DROP DATABASE IF EXISTS test;
-DELETE FROM mysql.db WHERE Db='test' OR Db='test\\_%';
-FLUSH PRIVILEGES;
-_EOF_
-
-#Create PB2 database and user.
-mysql -uroot -p"$SQL_ROOTPWD" -e "CREATE DATABASE $PB2_DB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci";
-mysql -uroot -p"$SQL_ROOTPWD" -e "GRANT ALL PRIVILEGES ON $PB2_DB.* TO '$PB2_USER'@'localhost' IDENTIFIED BY '$PB2_PWD';"
+sudo mysql -e "CREATE DATABASE $PB2_DB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;";
+sudo mysql -e "CREATE USER pajbot@localhost IDENTIFIED VIA unix_socket;"
+sudo mysql -e "GRANT ALL PRIVILEGES ON pb2.* to 'pajbot'@'localhost';"
+sudo mysql -e "FLUSH PRIVILEGES;"
 
 #Install acme.sh to manage ssl certs
 if [[ $LOCAL_INSTALL = "true" ]]
@@ -181,6 +171,7 @@ if [[ $LOCAL_INSTALL = "true" ]]
 then
     echo 'Local install enabled. Do not generate certificate.'
 else
+
 #Setup temporary http webroot to issue the initial certificate
 cat << EOF > $PB2TMP/leissue.conf
 server {
@@ -209,7 +200,6 @@ cat << EOF > $PB2TMP/pajbot2.conf
 server {
   listen 80;
   server_name $PB2_HOST;
-  include /etc/nginx/harden.conf;
 
 location / {
    proxy_pass http://127.0.0.1:$PB2_PORT;
@@ -226,13 +216,11 @@ cat << EOF > $PB2TMP/pajbot2.conf
 server {
   listen 80;
   server_name $PB2_HOST;
-  include /etc/nginx/harden.conf;
   return 301 https://\$server_name\$request_uri;
 }
 server {
   listen 443 ssl http2;
   server_name $PB2_HOST;
-  include /etc/nginx/harden.conf;
   ssl_certificate /root/.acme.sh/$PB2_HOST/fullchain.cer;
   ssl_certificate_key /root/.acme.sh/$PB2_HOST/$PB2_HOST.key;
 
@@ -246,13 +234,6 @@ location / {
 }
 EOF
 fi
-
-#nginx hardening, disable unneeded methods
-cat << 'EOF' > $PB2TMP/harden.conf
-if ($request_method !~ ^(GET|HEAD|POST|DELETE)$ ) {
-    return 444;
-}
-EOF
 
 #nginx main config
 cat << 'EOF' > $PB2TMP/nginx.conf
@@ -296,12 +277,6 @@ http {
 }
 EOF
 
-if [ -f /etc/nginx/harden.conf ]; then
-    echo "Hardening config already exists. skip copying"
-else
-    sudo mv $PB2TMP/harden.conf /etc/nginx/harden.conf
-fi
-
 if [[ $LOCAL_INSTALL = "true" ]]
 then
     echo 'Local install enabled. Do not copy ssl config.'
@@ -314,12 +289,13 @@ else
 fi
 
 sudo mv $PB2TMP/nginx.conf /etc/nginx/nginx.conf
-sudo mv $PB2TMP/pajbot2.conf /etc/nginx/sites-enabled/pajbot2.conf
+sudo mv $PB2TMP/pajbot2.conf /etc/nginx/sites-available/pajbot2.conf
+sudo ln -s /etc/nginx/sites-available/pajbot2.conf /etc/nginx/sites-enabled/
 sudo rm /etc/nginx/sites-enabled/default
 sudo systemctl restart nginx
 
-#Setup pb2config and pm2config
-cat << EOF > ~/go/src/github.com/pajlada/pajbot2/cmd/bot/config.json
+#Setup pb2config
+cat << EOF > $PB2TMP/config.json
 {
     "Redis": {
         "Host":"localhost:6379"
@@ -333,7 +309,7 @@ cat << EOF > ~/go/src/github.com/pajlada/pajbot2/cmd/bot/config.json
         "Secure": $PB2_WS_SEC
     },
     "SQL": {
-        "DSN": "$PB2_USER:$PB2_PWD@tcp(localhost:3306)/$PB2_DB?charset=utf8mb4,utf8&parseTime=true"
+        "DSN": "pajbot@unix(/var/run/mysqld/mysqld.sock)/$PB2_DB?charset=utf8mb4,utf8&parseTime=true"
     },
     "Auth": {
         "Twitch": {
@@ -356,40 +332,41 @@ cat << EOF > ~/go/src/github.com/pajlada/pajbot2/cmd/bot/config.json
     }
 }
 EOF
-cat << EOF > ~/go/src/github.com/pajlada/pajbot2/cmd/bot/ecosystem.config.js
-module.exports = {
-    apps: [{
-        name: "$PM2_NAME",
-        script: "bot",
-        cwd: "$PB2_PATH",
-        args: "run",
-        env: {
-          "LIBCOREFOLDER": "$CLRPATH",
-        },
-      }
-    ]
-}
-EOF
+sudo chown -R pajbot:pajbot $PB2TMP/config.json
+sudo mv $PB2TMP/config.json /home/pajbot/git/pajbot2/cmd/bot/config.json
 
-#Build and Start the Bot
-cd ~/go/src/github.com/pajlada/pajbot2
-chmod +x ./utils/install.sh && ./utils/install.sh
-cd ~/go/src/github.com/pajlada/pajbot2/cmd/bot
-go build -tags csharp
-pm2 start
+#Setup systemd unit for pajbot2
+if [ -f /etc/systemd/system/pajbot2.service ]; then
+echo "Systemd config exists. Skipping install"
+else
+echo "Systemd service missing. Installing service file"
+cat << EOF > $PB2TMP/pajbot2.service
+[Unit]
+Description=pajbot2
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/home/pajbot/git/pajbot2/cmd/bot/start.sh
+WorkingDirectory=/home/pajbot/git/pajbot2/cmd/bot
+TimeoutStopSec=5
+User=pajbot
+Group=pajbot
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo mv $PB2TMP/pajbot2.service /etc/systemd/system/pajbot2.service
+sudo systemctl daemon-reload
+fi
+
+#Start the Bot
+sudo systemctl start pajbot2
 echo "Waiting for 15 seconds for bot to fully start."
 sleep 15
 read -r -p "Go to $PB2_PROTO://$PB2_HOST/api/auth/twitch/bot And authorize your bot account. Press enter after this has been done."
-pm2 restart pajbot2
-
-#Configuring Firewall
-sudo ufw allow ssh
-sudo ufw allow 'Nginx Full'
-sudo ufw --force enable
-
-#Configuring pm2 autostartup
-sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u $USER --hp $HOME
-pm2 save
+sudo systemctl restart pajbot2
 
 echo "pajbot2 Installed. Access the web interface in $PB2_PROTO://$PB2_HOST"
 
