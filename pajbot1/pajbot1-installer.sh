@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 PB1_BRC_OAUTH="" # Broadcaster OAuth. Leave this empty.
+source /etc/os-release
 
 if [ -f $PWD/pb1install.config ]; then
     source $PWD/pb1install.config
@@ -17,6 +18,23 @@ fi
 
 if [[ -z $PB1_BOT_CLID || -z $PB1_BOT_CLSEC || -z $PB1_SHRD_CLID ]]; then
     echo "No credentials specified."
+    exit 1
+fi
+
+if [ $ID == "debian" ] && [ $VERSION_ID == "9" ]
+then
+    echo "Debian 9 detected"
+    OS_VER="debian9"
+elif [ $ID == "ubuntu" ] && [ $VERSION_ID == "18.04" ]
+then
+    echo "Ubuntu 18.04 Detected"
+    OS_VER="ubuntu1804"
+elif [ $ID == "ubuntu" ] && [ $VERSION_ID == "19.04" ]
+then
+    echo "Ubuntu 19.04 Detected"
+    OS_VER="ubuntu1904"
+else
+    echo "No supported OS detected. Exit script."
     exit 1
 fi
 
@@ -55,9 +73,11 @@ PB1TMP=$HOME/pb1tmp
 sudo adduser --shell /bin/bash --system --group pajbot
 
 #Configure APT and Install Packages
+if [ $ID == "ubuntu" ]; then
 sudo add-apt-repository universe
+fi
 sudo apt update && sudo apt upgrade -y
-sudo apt install mariadb-server redis-server openjdk-8-jre-headless nginx libssl-dev python3 python3-pip python3-venv uwsgi uwsgi-plugin-python3 git curl -y
+sudo apt install mariadb-server redis-server openjdk-8-jre-headless nginx libssl-dev python3 python3-pip python3-venv python3-dev uwsgi uwsgi-plugin-python3 git curl build-essential -y
 
 #Install APIProxy
 sudo mkdir /opt/apiproxy
@@ -273,7 +293,9 @@ else
 fi
 
 
-cat << EOF > $PB1TMP/ssl.conf
+if [ $OS_VER == "ubuntu1904" ]
+then
+cat << 'EOF' > $PB1TMP/ssl.conf
 ssl_protocols TLSv1.2 TLSv1.3;
 ssl_prefer_server_ciphers on;
 ssl_dhparam /etc/nginx/dhparam.pem;
@@ -291,6 +313,26 @@ add_header X-Frame-Options SAMEORIGIN;
 add_header X-Content-Type-Options nosniff;
 add_header X-XSS-Protection "1; mode=block";
 EOF
+else
+cat << 'EOF' > $PB1TMP/ssl.conf
+ssl_protocols TLSv1.2;
+ssl_prefer_server_ciphers on;
+ssl_dhparam /etc/nginx/dhparam.pem;
+ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+ssl_ecdh_curve secp384r1;
+ssl_session_timeout  10m;
+ssl_session_cache shared:SSL:10m;
+ssl_session_tickets off;
+ssl_stapling on;
+ssl_stapling_verify on;
+resolver 1.1.1.1 8.8.8.8 valid=300s;
+resolver_timeout 5s;
+add_header Strict-Transport-Security "max-age=63072000";
+add_header X-Frame-Options SAMEORIGIN;
+add_header X-Content-Type-Options nosniff;
+add_header X-XSS-Protection "1; mode=block";
+EOF
+fi
 
 if [[ $LOCAL_INSTALL = "true" ]]
 then
@@ -364,7 +406,8 @@ server {
 
     location /.well-known/acme-challenge/ {
         alias /var/www/le_root/.well-known/acme-challenge/;
-}
+    }
+
     location / {
         return 301 https://\$server_name\$request_uri;
     }

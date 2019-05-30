@@ -1,8 +1,6 @@
 # pajbot1 installer
 
-## Only Ubuntu 18.04 and above are tested to work
-
-### The script will overwrite nginx.conf and deletes the default vhost conf file
+## Only Ubuntu 18.04, 19.04 and Debian 9 are supported
 
 Check that your domain of choice is already forwarded to the server's IP and ports 80 and 443 are reachable.
 If you are behind a NAT, forward ports 80 and 443 to the server.
