@@ -1,5 +1,4 @@
 LOCAL_INSTALL="false" # Set to true if you want to use a ip address or a local domain as the hostname. This will disable SSL in the web interface.
-DHSIZE="4096" #DHParameter Size
 PB1_ADM="" #Admin Username
 PB1_BRC="" #Broadcaster's Username in lowercase
 PB1_TIMEZONE="" #Timezone in TZ format

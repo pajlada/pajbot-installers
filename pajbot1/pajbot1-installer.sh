@@ -4,8 +4,7 @@ source /etc/os-release
 
 if [ -f $PWD/pb1install.config ]; then
     source $PWD/pb1install.config
-    PB1_DB="pb_$PB1_NAME"
-    PB1_USER="pb_$PB1_NAME"
+    PB1_DB="pb_$PB1_BRC"
 else
     echo "Config file missing. Exit."
     exit 1
@@ -133,7 +132,7 @@ sudo mysql -e "GRANT ALL PRIVILEGES ON \`pb\_%\`.* to 'pajbot'@'localhost';"
 sudo mysql -e "FLUSH PRIVILEGES;"
 
 #Setup pb1config
-cat << EOF > $PB1TMP/$PB1_NAME.ini
+cat << EOF > $PB1TMP/$PB1_BRC.ini
 [main]
 ; display name of the bot account
 nickname = $PB1_NAME
@@ -163,7 +162,7 @@ trusted_mods = 0
 [web]
 ; enabled web modules, separated by spaces. For example you could make this
 ; "linefarming pleblist" to enable the pleblist module additionally.
-modules = linefarming
+modules = linefarming playsounds
 ; display name of the broadcaster
 streamer_name = $PB1_BRC
 ; domain that the website runs on
@@ -171,14 +170,10 @@ domain = $PB1_HOST
 ; this configures hearthstone decks functionality if you have the module enabled
 deck_tab_images = 1
 
-; streamelements login credentials if you are using pleblist, to get donations info
-; note that streamelements login with pajbot is dead, since StreamElements removed their OAuth login endpoint.
-; just leave these defaults in place
 [streamelements]
 client_id = abc
 client_secret = def
 
-; streamlabs login credentials if you are using pleblist, to get donations info
 [streamlabs]
 client_id = abc
 client_secret = def
@@ -195,23 +190,10 @@ quit = {nickname} {version} shutting down...
 ;quit = .emoteonly
 ;    {nickname} {version} shutting down...
 
-; this is to allow users/admins to login with the bot on the website
-; use a bot/channel-specific client id/secret for this
-; the application name of this application will be shown to all users/admins
-; that want to login on the site.
-; the client_id and client_secret values are required to authorize the bot and get its access token to join chat
 [webtwitchapi]
 client_id = $PB1_BOT_CLID
 client_secret = $PB1_BOT_CLSEC
 redirect_uri = $PB1_PROTO://$PB1_HOST/login/authorized
-
-; this allows the bot to act on behalf of the broadcaster, i.e.
-; set the game and title and get the amount/status of subscribers.
-; Let your broadcaster do an authorization using this link (use the bot-specific client ID):
-; https://id.twitch.tv/oauth2/authorize?client_id=0bb4b8517c0b20e0a72ddbfd88aa69&redirect_uri=https://twitchapps.com/tmi/&response_type=token&scope=channel_subscriptions+channel_editor
-; note that you temporarily have to edit your bot-specific twitch app with the
-; redirect URL "https://twitchapps.com/tmi/". (If you haven't done so already.) Edit it back to
-; "https://bot.kkonatestbroadcaster.tv/login/authorized" afterwards.
 
 [twitchapi]
 client_id = $PB1_BOT_CLID
@@ -235,17 +217,12 @@ dev = 1
 
 [websocket]
 enabled = 1
-port = 2337
+unix_socket = /opt/pajbot-sock/$PB1_BRC-websocket.sock
 host = $PB1_WS_PROTO://$PB1_HOST/clrsocket
 
 ; you can optionally populate this for pleblist
 [youtube]
 developer_key = abc
-
-; This socket lets the bot process and the web process communicate
-; This is NOT the socket of the uwsgi process to proxy web requests to
-[sock]
-sock_file = /srv/pajbot/.$PB1_NAME.sock
 EOF
 cat << EOF > $PB1TMP/uwsgi_shared.ini
 [uwsgi]
@@ -276,7 +253,7 @@ else
     if sudo test -f "/root/.acme.sh/acme.sh"; then
         echo "acme.sh already installed. skip"
     else
-        sudo -S -u root -i /bin/bash -l -c 'curl https://raw.githubusercontent.com/Neilpang/acme.sh/master/acme.sh | INSTALLONLINE=1  sh'
+        sudo -S -u root -i /bin/bash -l -c 'curl https://get.acme.sh | sh'
     fi
 fi
 
@@ -288,7 +265,7 @@ else
     if [ -f /etc/nginx/dhparam.pem ]; then
         echo "DHParams exist. Skip generation"
     else
-        sudo openssl dhparam -out /etc/nginx/dhparam.pem -dsaparam $DHSIZE
+        sudo openssl dhparam -out /etc/nginx/dhparam.pem -dsaparam 4096
     fi
 fi
 
@@ -299,7 +276,7 @@ cat << 'EOF' > $PB1TMP/ssl.conf
 ssl_protocols TLSv1.2 TLSv1.3;
 ssl_prefer_server_ciphers on;
 ssl_dhparam /etc/nginx/dhparam.pem;
-ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
 ssl_ecdh_curve secp384r1;
 ssl_session_timeout  10m;
 ssl_session_cache shared:SSL:10m;
@@ -318,7 +295,7 @@ cat << 'EOF' > $PB1TMP/ssl.conf
 ssl_protocols TLSv1.2;
 ssl_prefer_server_ciphers on;
 ssl_dhparam /etc/nginx/dhparam.pem;
-ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
 ssl_ecdh_curve secp384r1;
 ssl_session_timeout  10m;
 ssl_session_cache shared:SSL:10m;
@@ -362,32 +339,36 @@ if [[ $LOCAL_INSTALL = "true" ]]
 then
     echo 'Local install enabled. Copy vhost config without ssl settings.'
 #pb1 vhost no ssl
-cat << EOF > $PB1TMP/pajbot1-$PB1_NAME.conf
-upstream $PB1_NAME-botsite {
-    server unix:///srv/pajbot-web/.$PB1_NAME.sock;
+cat << EOF > $PB1TMP/pajbot1-$PB1_BRC.conf
+upstream $PB1_BRC-botsite {
+    server unix:///opt/pajbot-sock/$PB1_BRC-web.sock;
+}
+upstream $PB1_BRC-websocket {
+    server unix:///opt/pajbot-sock/$PB1_BRC-websocket.sock;
 }
 
 server {
     listen 80;
+    listen [::]:80;
     server_name $PB1_HOST;
 
     charset utf-8;
 
     location /api/ {
-        uwsgi_pass $PB1_NAME-botsite;
+        uwsgi_pass $PB1_BRC-botsite;
         include uwsgi_params;
         expires epoch;
     }
 
     location / {
-        uwsgi_pass $PB1_NAME-botsite;
+        uwsgi_pass $PB1_BRC-botsite;
         include uwsgi_params;
         expires epoch;
         add_header Cache-Control "public";
     }
 
     location /clrsocket {
-        proxy_pass http://127.0.0.1:2337;
+        proxy_pass http://$PB1_BRC-websocket/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "Upgrade";
@@ -396,12 +377,17 @@ server {
 EOF
 else
 #pb1 vhost ssl
-cat << EOF > $PB1TMP/pajbot1-$PB1_NAME.conf
-upstream $PB1_NAME-botsite {
-    server unix:///srv/pajbot-web/.$PB1_NAME.sock;
+cat << EOF > $PB1TMP/pajbot1-$PB1_BRC.conf
+upstream $PB1_BRC-botsite {
+    server unix:///opt/pajbot-sock/$PB1_BRC-web.sock;
 }
+upstream $PB1_BRC-websocket {
+    server unix:///opt/pajbot-sock/$PB1_BRC-websocket.sock;
+}
+
 server {
     listen 80;
+    listen [::]:80;
     server_name $PB1_HOST;
 
     location /.well-known/acme-challenge/ {
@@ -416,6 +402,7 @@ server {
 
 server {
     listen 443 ssl http2;
+    listen [::]:443 ssl http2;
     server_name $PB1_HOST;
     ssl_certificate /root/.acme.sh/$PB1_HOST/fullchain.cer;
     ssl_certificate_key /root/.acme.sh/$PB1_HOST/$PB1_HOST.key;
@@ -423,20 +410,20 @@ server {
     charset utf-8;
 
     location /api/ {
-        uwsgi_pass $PB1_NAME-botsite;
+        uwsgi_pass $PB1_BRC-botsite;
         include uwsgi_params;
         expires epoch;
     }
 
     location / {
-        uwsgi_pass $PB1_NAME-botsite;
+        uwsgi_pass $PB1_BRC-botsite;
         include uwsgi_params;
         expires epoch;
         add_header Cache-Control "public";
     }
 
     location /clrsocket {
-        proxy_pass http://127.0.0.1:2337;
+        proxy_pass http://$PB1_BRC-websocket/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "Upgrade";
@@ -463,6 +450,7 @@ http {
         keepalive_timeout 65;
         types_hash_max_size 2048;
         server_tokens off;
+        server_names_hash_bucket_size 64;
 
         include /etc/nginx/mime.types;
         default_type application/octet-stream;
@@ -475,12 +463,6 @@ http {
         error_log /var/log/nginx/error.log;
 
         gzip on;
-
-        server {
-                listen       80  default_server;
-                server_name  _;
-                return       404;
-        }
 
         include /etc/nginx/conf.d/*.conf;
         include /etc/nginx/sites-enabled/*;
@@ -499,9 +481,49 @@ else
     fi
 fi
 
+#Setup catchall vhost
+if [[ $LOCAL_INSTALL = "true" ]]
+then
+echo 'Local install enabled. Create catchall config without https'
+cat << EOF > $PB1TMP/catchall.conf
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    access_log off;
+
+    location / {
+        return 404;
+    }
+}
+EOF
+else
+cat << EOF > $PB1TMP/catchall.conf
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    access_log off;
+    ssl_certificate /root/.acme.sh/$PB1_HOST/fullchain.cer;
+    ssl_certificate_key /root/.acme.sh/$PB1_HOST/$PB1_HOST.key;
+
+    location / {
+        return 404;
+    }
+}
+EOF
+fi
+
+if [ -f /etc/nginx/sites-enabled/catchall.conf ]; then
+    echo "Catchall config exists. skip copy"
+else
+    sudo mv $PB1TMP/catchall.conf /etc/nginx/sites-available/catchall.conf
+    sudo ln -s /etc/nginx/sites-available/catchall.conf /etc/nginx/sites-enabled/
+fi
+
 sudo mv $PB1TMP/nginx.conf /etc/nginx/nginx.conf
-sudo mv $PB1TMP/pajbot1-$PB1_NAME.conf /etc/nginx/sites-available/pajbot1-$PB1_NAME.conf
-sudo ln -s /etc/nginx/sites-available/pajbot1-$PB1_NAME.conf /etc/nginx/sites-enabled/
+sudo mv $PB1TMP/pajbot1-$PB1_BRC.conf /etc/nginx/sites-available/pajbot1-$PB1_BRC.conf
+sudo ln -s /etc/nginx/sites-available/pajbot1-$PB1_BRC.conf /etc/nginx/sites-enabled/
 sudo rm /etc/nginx/sites-enabled/default
 sudo systemctl restart nginx
 
@@ -516,7 +538,7 @@ Type=simple
 User=pajbot
 Group=pajbot
 WorkingDirectory=/opt/pajbot
-ExecStart=/usr/bin/uwsgi --ini uwsgi_shared.ini --ini uwsgi_cache.ini --socket /srv/pajbot-web/.%i.sock --pyargv "--config configs/%i.ini" --virtualenv venv
+ExecStart=/usr/bin/uwsgi --ini uwsgi_shared.ini --ini uwsgi_cache.ini --socket /opt/pajbot-sock/%i-web.sock --pyargv "--config configs/%i.ini" --virtualenv venv
 RestartSec=2
 Restart=always
 
@@ -545,12 +567,12 @@ EOF
 #Install Bot
 cd $PB1TMP/pajbot
 mkdir configs
-mv $PB1TMP/$PB1_NAME.ini configs/$PB1_NAME.ini
+mv $PB1TMP/$PB1_BRC.ini configs/$PB1_BRC.ini
 mv $PB1TMP/uwsgi_shared.ini $PB1TMP/pajbot/
 sudo cp -r $PB1TMP/pajbot /opt/pajbot
 cd /opt/pajbot
-sudo mkdir /srv/pajbot /srv/pajbot-web
-sudo chown pajbot:pajbot /srv/pajbot /srv/pajbot-web
+sudo mkdir /opt/pajbot-sock
+sudo chown pajbot:pajbot /opt/pajbot-sock
 sudo chown -R pajbot:pajbot /opt/pajbot
 
 #Enable systemd services for the bot and start it up.
@@ -558,12 +580,12 @@ sudo mv $PB1TMP/pajbot@.service /etc/systemd/system/
 sudo mv $PB1TMP/pajbot-web@.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sleep 2
-sudo systemctl enable pajbot@$PB1_NAME
-sudo systemctl enable pajbot-web@$PB1_NAME
-sudo systemctl start pajbot@$PB1_NAME
+sudo systemctl enable pajbot@$PB1_BRC
+sudo systemctl enable pajbot-web@$PB1_BRC
+sudo systemctl start pajbot@$PB1_BRC
 echo 'Waiting 30 seconds for bot to initialize and starting the webui after that.'
 sleep 30
-sudo systemctl start pajbot-web@$PB1_NAME
+sudo systemctl start pajbot-web@$PB1_BRC
 
 #Done
 echo "pajbot1 Installed. Access the web interface in $PB1_PROTO://$PB1_HOST"
