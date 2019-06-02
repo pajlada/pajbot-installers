@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-PB2_PORT="45334"
 source /etc/os-release
 
 if [ -f $PWD/pb2install.config ]; then
@@ -136,7 +135,7 @@ else
     if sudo test -f "/root/.acme.sh/acme.sh"; then
         echo "acme.sh already installed. skip"
     else
-        sudo -S -u root -i /bin/bash -l -c 'curl https://raw.githubusercontent.com/Neilpang/acme.sh/master/acme.sh | INSTALLONLINE=1  sh'
+        sudo -S -u root -i /bin/bash -l -c 'curl https://get.acme.sh | sh'
     fi
 fi
 
@@ -148,7 +147,7 @@ else
     if [ -f /etc/nginx/dhparam.pem ]; then
         echo "DHParams exist. Skip generation"
     else
-        sudo openssl dhparam -out /etc/nginx/dhparam.pem -dsaparam $DHSIZE
+        sudo openssl dhparam -out /etc/nginx/dhparam.pem -dsaparam 4096
     fi
 fi
 
@@ -158,7 +157,7 @@ cat << 'EOF' > $PB2TMP/ssl.conf
 ssl_protocols TLSv1.2 TLSv1.3;
 ssl_prefer_server_ciphers on;
 ssl_dhparam /etc/nginx/dhparam.pem;
-ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
 ssl_ecdh_curve secp384r1;
 ssl_session_timeout  10m;
 ssl_session_cache shared:SSL:10m;
@@ -177,7 +176,7 @@ cat << 'EOF' > $PB2TMP/ssl.conf
 ssl_protocols TLSv1.2;
 ssl_prefer_server_ciphers on;
 ssl_dhparam /etc/nginx/dhparam.pem;
-ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+ssl_ciphers EECDH+AESGCM:EDH+AESGCM;
 ssl_ecdh_curve secp384r1;
 ssl_session_timeout  10m;
 ssl_session_cache shared:SSL:10m;
@@ -226,6 +225,7 @@ then
 cat << EOF > $PB2TMP/pajbot2.conf
 server {
   listen 80;
+  listen [::]:80;
   server_name $PB2_HOST;
 
 location / {
@@ -242,6 +242,7 @@ else
 cat << EOF > $PB2TMP/pajbot2.conf
 server {
   listen 80;
+  listen [::]:80;
   server_name $PB2_HOST;
   
     location /.well-known/acme-challenge/ {
@@ -255,6 +256,7 @@ server {
 }
 server {
   listen 443 ssl http2;
+  listen [::]:443 ssl http2;
   server_name $PB2_HOST;
   ssl_certificate /root/.acme.sh/$PB2_HOST/fullchain.cer;
   ssl_certificate_key /root/.acme.sh/$PB2_HOST/$PB2_HOST.key;
@@ -288,6 +290,7 @@ http {
         keepalive_timeout 65;
         types_hash_max_size 2048;
         server_tokens off;
+        server_names_hash_bucket_size 64;
 
         include /etc/nginx/mime.types;
         default_type application/octet-stream;
@@ -300,12 +303,6 @@ http {
         error_log /var/log/nginx/error.log;
 
         gzip on;
-
-        server {
-                listen       80  default_server;
-                server_name  _;
-                return       404;
-        }
 
         include /etc/nginx/conf.d/*.conf;
         include /etc/nginx/sites-enabled/*;
@@ -321,6 +318,45 @@ else
     else
         sudo mv $PB2TMP/ssl.conf /etc/nginx/conf.d/ssl.conf
     fi
+fi
+
+if [[ $LOCAL_INSTALL = "true" ]]
+then
+echo 'Local install enabled. Create catchall config without https'
+cat << EOF > $PB2TMP/catchall.conf
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    access_log off;
+
+    location / {
+        return 404;
+    }
+}
+EOF
+else
+cat << EOF > $PB2TMP/catchall.conf
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    access_log off;
+    ssl_certificate /root/.acme.sh/$PB2_HOST/fullchain.cer;
+    ssl_certificate_key /root/.acme.sh/$PB2_HOST/$PB2_HOST.key;
+
+    location / {
+        return 404;
+    }
+}
+EOF
+fi
+
+if [ -f /etc/nginx/sites-enabled/catchall.conf ]; then
+    echo "Catchall config exists. skip copy"
+else
+    sudo mv $PB2TMP/catchall.conf /etc/nginx/sites-available/catchall.conf
+    sudo ln -s /etc/nginx/sites-available/catchall.conf /etc/nginx/sites-enabled/
 fi
 
 sudo mv $PB2TMP/nginx.conf /etc/nginx/nginx.conf
@@ -398,6 +434,7 @@ fi
 
 #Start the Bot
 sudo systemctl start pajbot2
+sudo systemctl enable pajbot2
 echo "Waiting for 15 seconds for bot to fully start."
 sleep 15
 read -r -p "Go to $PB2_PROTO://$PB2_HOST/api/auth/twitch/bot And authorize your bot account. Press enter after this has been done."
